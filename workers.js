@@ -7,6 +7,8 @@ import { maxTime } from './solver.js';
 
 const workerFile = fileURLToPath(new URL('./worker.js', import.meta.url));
 const minWorkers = 2;
+const maxWorkers = 4;
+const idleLimit = 30_000;
 
 export class WorkerPool {
   workers = [];
@@ -21,6 +23,7 @@ export class WorkerPool {
   start() {
     if (this.closed) return;
     while (this.workers.length < minWorkers) this.spawn();
+    this.timer ??= setInterval(() => this.trim(), 1000).unref();
   }
 
   spawn() {
@@ -30,23 +33,85 @@ export class WorkerPool {
       env: { ...process.env, WORKER_KEY: this.key, ADMIN_PASSWORD: '' },
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
     });
-    const worker = { name: 'server-' + number, child, port: 0, lastUsed: 0, active: null };
+    const worker = {
+      name: 'server-' + number,
+      child,
+      port: 0,
+      lastUsed: 0,
+      idleSince: Date.now(),
+      active: null,
+      stopping: false,
+      cpu: null,
+      memory: null,
+    };
     this.workers.push(worker);
-    const startup = setTimeout(() => child.kill(), 5000);
+    const startup = setTimeout(() => this.retire(worker), 5000);
 
     child.on('message', message => {
-      if (this.closed || !message.port) return;
-      clearTimeout(startup);
-      worker.port = message.port;
-      this.onReady();
+      if (this.closed || worker.stopping) return;
+      if (message.port) {
+        clearTimeout(startup);
+        worker.port = message.port;
+        worker.idleSince = Date.now();
+        this.onReady();
+      } else {
+        worker.cpu = message.cpu;
+        worker.memory = message.memory;
+      }
     });
     child.on('error', error => console.error(worker.name, error.message));
-    child.on('exit', () => { worker.port = 0; });
+    child.on('exit', () => {
+      worker.port = 0;
+      worker.stopping = true;
+    });
     child.once('close', () => {
       clearTimeout(startup);
       this.workers.splice(this.workers.indexOf(worker), 1);
       if (!this.closed) setTimeout(() => this.start(), 500).unref();
     });
+  }
+
+  scale(pending) {
+    if (this.closed) return;
+    const starting = this.workers.filter(worker => !worker.port && !worker.stopping).length;
+    const extra = Math.min(pending - starting, maxWorkers - this.workers.length);
+    for (let i = 0; i < extra; i++) this.spawn();
+  }
+
+  trim() {
+    const cutoff = Date.now() - idleLimit;
+    for (const worker of this.workers.slice(minWorkers)) {
+      if (worker.port && !worker.active && worker.idleSince < cutoff) this.retire(worker);
+    }
+  }
+
+  retire(worker) {
+    worker.stopping = true;
+    worker.port = 0;
+    worker.child.kill();
+  }
+
+  availableIn(now, average) {
+    const slots = this.workers.filter(worker => !worker.stopping).map(worker => {
+      if (worker.active) return Math.max(1000, average - (now - worker.active.started));
+      return worker.port ? 0 : 1000;
+    });
+    return slots.length ? slots : [1000];
+  }
+
+  status() {
+    return {
+      min: minWorkers,
+      max: maxWorkers,
+      workers: this.workers.map(worker => ({
+        name: worker.name,
+        pid: worker.child.pid,
+        state: worker.stopping ? 'stopping' : !worker.port ? 'starting' : worker.active ? 'busy' : 'idle',
+        jobId: worker.active?.id ?? null,
+        cpu: worker.cpu,
+        memory: worker.memory,
+      })),
+    };
   }
 
   next() {
@@ -57,7 +122,7 @@ export class WorkerPool {
 
   async run(worker, job, report) {
     const controller = new AbortController();
-    worker.active = { id: job.id, controller };
+    worker.active = { id: job.id, controller, started: Date.now() };
     worker.lastUsed = ++this.sequence;
     const url = `http://127.0.0.1:${worker.port}/run/${job.id}`;
     const authorization = 'Bearer ' + this.key;
@@ -68,8 +133,7 @@ export class WorkerPool {
         signal: AbortSignal.timeout(2000),
       }).catch(() => {
         if (worker.active?.id !== job.id) return;
-        worker.port = 0;
-        worker.child.kill();
+        this.retire(worker);
       });
     };
 
@@ -96,8 +160,7 @@ export class WorkerPool {
       throw new Error('Сервер завершив з’єднання.');
     } catch (error) {
       if (error.name === 'TimeoutError' || error.name === 'AbortError' || !worker.port || error instanceof TypeError) {
-        worker.port = 0;
-        worker.child.kill();
+        this.retire(worker);
         throw new Error('Сервер обчислень не відповів.');
       }
       throw error;
@@ -108,6 +171,7 @@ export class WorkerPool {
 
   release(worker) {
     worker.active = null;
+    worker.idleSince = Date.now();
     if (!this.closed) this.onReady();
   }
 
@@ -117,6 +181,7 @@ export class WorkerPool {
 
   close() {
     this.closed = true;
-    for (const worker of this.workers) worker.child.kill();
+    clearInterval(this.timer);
+    for (const worker of this.workers) this.retire(worker);
   }
 }

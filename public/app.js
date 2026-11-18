@@ -4,6 +4,8 @@ const taskForm = byId('job-form');
 const workspace = byId('workspace');
 const notice = byId('notice');
 const jobs = byId('jobs');
+const adminPanel = byId('admin-panel');
+const adminToggle = byId('admin-toggle');
 const rows = new Map();
 const labels = {
   queued: 'У черзі',
@@ -17,6 +19,7 @@ const dateFormat = new Intl.DateTimeFormat('uk-UA', { dateStyle: 'short', timeSt
 let user = null;
 let revision = 0;
 let updating = false;
+let adminView = false;
 
 async function api(path, method = 'GET', body) {
   const response = await fetch('/api' + path, {
@@ -36,21 +39,36 @@ function showError(message = '') {
 
 function setUser(value) {
   user = value;
-  revision++;
   byId('login-panel').hidden = Boolean(user);
   byId('account').hidden = !user;
   byId('username').textContent = user?.name ?? '';
-  workspace.hidden = !user;
+  adminToggle.hidden = !user?.admin;
   rows.clear();
   jobs.replaceChildren();
-  if (user) refresh();
+  byId('empty').hidden = false;
+  byId('job-count').textContent = '';
+  byId('result-dialog').close();
+  setView(false);
 }
+
+function setView(admin) {
+  revision++;
+  adminView = admin;
+  adminPanel.hidden = !admin;
+  workspace.hidden = !user || admin;
+  adminToggle.setAttribute('aria-pressed', String(admin));
+  adminToggle.textContent = admin ? 'Мої задачі' : 'Моніторинг';
+  refresh();
+}
+
+adminToggle.addEventListener('click', () => setView(!adminView));
 
 login.addEventListener('submit', async event => {
   event.preventDefault();
   const fields = new FormData(login);
   const button = event.submitter;
-  if (button) button.disabled = true;
+  const buttons = login.querySelectorAll('button');
+  buttons.forEach(control => { control.disabled = true; });
   showError();
   try {
     const data = await api('/' + (button?.value ?? 'login'), 'POST', {
@@ -62,7 +80,7 @@ login.addEventListener('submit', async event => {
   } catch (error) {
     showError(error.message);
   } finally {
-    if (button) button.disabled = false;
+    buttons.forEach(control => { control.disabled = false; });
   }
 });
 
@@ -121,8 +139,8 @@ function updateRow(row, job) {
   row.querySelector('.job-meta').textContent = meta.join(' · ');
   const active = job.status === 'running' || job.status === 'queued';
   row.querySelector('.job-progress').hidden = !active;
-  row.querySelector('.stage').textContent = job.stage;
-  row.querySelector('.percent').textContent = job.progress + '%';
+  row.querySelector('.stage').textContent = job.wait ? `Місце в черзі: ${job.wait.position}` : job.stage;
+  row.querySelector('.percent').textContent = job.wait ? `≈ ${job.wait.seconds} с` : job.progress + '%';
   row.querySelector('progress').value = job.progress;
   const error = row.querySelector('.job-error');
   error.textContent = job.error ?? '';
@@ -132,13 +150,43 @@ function updateRow(row, job) {
   row.querySelector('.actions').hidden = !active && job.status !== 'done';
 }
 
+function fillTable(target, rows) {
+  const elements = rows.map(values => {
+    const row = document.createElement('tr');
+    for (const value of values) {
+      const cell = row.insertCell();
+      cell.textContent = value;
+    }
+    return row;
+  });
+  byId(target).replaceChildren(...elements);
+}
+
+function showAdmin(data) {
+  const states = { starting: 'Запускається', idle: 'Вільний', busy: 'Зайнятий', stopping: 'Зупиняється' };
+  byId('server-count').textContent = `${data.workers.length} / ${data.max}`;
+  fillTable('server-rows', data.workers.map(worker => [
+    worker.name, worker.pid ?? '—', states[worker.state], worker.jobId ?? '—',
+    worker.cpu === null ? '—' : worker.cpu + '%',
+    worker.memory === null ? '—' : worker.memory + ' МБ',
+  ]));
+  const waiting = data.jobs.filter(job => job.status === 'queued').length;
+  byId('active-count').textContent = `${data.jobs.length} / ${data.queueLimit} · у черзі ${waiting}`;
+  byId('admin-empty').hidden = data.jobs.length > 0;
+  byId('active-table').hidden = data.jobs.length === 0;
+  fillTable('active-rows', data.jobs.map(job => [
+    job.id, job.username, labels[job.status], job.worker ?? '—', job.progress + '%',
+  ]));
+}
+
 async function refresh() {
   if (!user || updating) return;
   updating = true;
   const snapshot = revision;
   try {
-    const data = await api('/jobs');
+    const data = await api(adminView ? '/admin' : '/jobs');
     if (snapshot !== revision) return;
+    if (adminView) return showAdmin(data);
     const current = new Set(data.jobs.map(job => job.id));
     for (const [id, row] of rows) {
       if (current.has(id)) continue;
@@ -159,12 +207,15 @@ async function refresh() {
     showError(error.message);
   } finally {
     updating = false;
+    if (snapshot !== revision) refresh();
   }
 }
 
 async function showResult(id) {
+  const snapshot = revision;
   try {
     const result = await api(`/jobs/${id}/result`);
+    if (snapshot !== revision) return;
     byId('result-title').textContent = 'Розв’язок задачі №' + id;
     byId('result-details').textContent = `${result.iterations} ітерацій · ${(result.durationMs / 1000).toFixed(2)} с · похибка до ${result.errorBound.toExponential(2)}`;
     const items = result.values.map((value, index) => {

@@ -46,8 +46,8 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 9px;
 }
 .account { font-size: .9rem; }
-.top button { color: white; background: #244a40; border-color: #58756c; }
-.top button:hover { background: #395c52; }
+.top button.secondary { color: white; background: #244a40; border-color: #58756c; }
+.top button.secondary:hover, .top button[aria-pressed="true"] { background: #395c52; }
 .intro { padding: 3.2rem 0 1.8rem; }
 h1 { font-size: clamp(2rem, 4.8vw, 3.15rem); line-height: 1.09; letter-spacing: -.045em; }
 .intro p { margin-top: .8rem; max-width: 42rem; }
@@ -131,7 +131,19 @@ dialog::backdrop { background: #123a2f99; }
 dialog p { margin-top: .75rem; color: var(--muted); }
 dialog ol { max-height: 45vh; overflow: auto; font-variant-numeric: tabular-nums; }
 
+.admin { margin-bottom: 3rem; }
+.active-head { margin-top: 1.6rem; }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin-top: .65rem; font-size: .88rem; }
+th, td { padding: .6rem .7rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { background: #f3f7f4; font-weight: 650; }
+
 @media (max-width: 720px) {
   .workspace { grid-template-columns: 1fr; }
   .intro { padding-top: 2rem; }
+}
+
+@media (max-width: 450px) {
+  .account > span { display: none; }
+  .top-inner { gap: .4rem; }
 }

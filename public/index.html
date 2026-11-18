@@ -14,6 +14,7 @@
       <a href="/" class="brand"><span aria-hidden="true">∑</span> Якобі</a>
       <div id="account" class="account" hidden>
         <span id="username"></span>
+        <button id="admin-toggle" class="secondary" aria-pressed="false" hidden>Моніторинг</button>
         <button id="logout" class="secondary">Вийти</button>
       </div>
     </div>
@@ -72,6 +73,34 @@
         <div id="jobs"></div>
       </section>
     </div>
+
+    <section id="admin-panel" class="card admin" aria-labelledby="admin-title" hidden>
+      <div class="section-head">
+        <h2 id="admin-title">Сервери обчислень</h2>
+        <span id="server-count"></span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Сервер</th><th>PID</th><th>Стан</th><th>Задача</th><th>CPU</th><th>Пам’ять</th></tr>
+          </thead>
+          <tbody id="server-rows"></tbody>
+        </table>
+      </div>
+      <div class="section-head active-head">
+        <h2>Активні задачі</h2>
+        <span id="active-count"></span>
+      </div>
+      <p id="admin-empty" class="empty" hidden>Зараз задач у роботі немає.</p>
+      <div class="table-scroll" id="active-table" hidden>
+        <table>
+          <thead>
+            <tr><th>Задача</th><th>Користувач</th><th>Стан</th><th>Сервер</th><th>Прогрес</th></tr>
+          </thead>
+          <tbody id="active-rows"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <dialog id="result-dialog">

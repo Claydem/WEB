@@ -5,6 +5,7 @@ import { HttpError } from './http.js';
 
 const deriveKey = promisify(scrypt);
 const sessionSeconds = 86_400;
+const adminName = 'admin';
 
 async function hashPassword(password, salt = randomBytes(16).toString('hex')) {
   const key = await deriveKey(password, salt, 64);
@@ -33,6 +34,19 @@ export function currentUser(request) {
   `).get(tokenHash(token), Date.now()) ?? null;
 }
 
+export async function setupAdmin() {
+  const password = process.env.ADMIN_PASSWORD;
+  if (!password) return;
+  if (password.length < 8 || password.length > 128) {
+    throw new Error('ADMIN_PASSWORD має містити 8–128 символів.');
+  }
+  const saved = db.prepare(`
+    INSERT INTO users (name, password, admin) VALUES (?, ?, 1)
+    ON CONFLICT(name) DO UPDATE SET password = excluded.password WHERE users.admin = 1
+  `).run(adminName, await hashPassword(password));
+  if (!saved.changes) throw new Error('Логін admin уже зайнятий звичайним обліковим записом.');
+}
+
 export async function signIn(request, response, details, register) {
   const name = typeof details?.name === 'string' ? details.name.trim().toLowerCase() : '';
   const password = details?.password;
@@ -42,7 +56,7 @@ export async function signIn(request, response, details, register) {
 
   const user = db.prepare('SELECT name, password, admin FROM users WHERE name = ?').get(name);
   if (register) {
-    if (user) throw new HttpError(409, 'Цей логін уже зайнятий.');
+    if (user || name === adminName) throw new HttpError(409, 'Цей логін недоступний.');
     const saved = db.prepare('INSERT OR IGNORE INTO users (name, password) VALUES (?, ?)').run(name, await hashPassword(password));
     if (!saved.changes) throw new HttpError(409, 'Цей логін уже зайнятий.');
   } else {

@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { currentUser, signIn, signOut } from './auth.js';
-import { cancelJob, createJob, jobResult, listJobs } from './database.js';
+import { createServer as createHttpsServer } from 'node:https';
+import { currentUser, setupAdmin, signIn, signOut } from './auth.js';
+import { activeJobs, cancelJob, createJob, jobResult, listJobs, queueLimit } from './database.js';
 import { HttpError, json, readJson, serveFile } from './http.js';
-import { dispatch, startQueue, stopJob, stopQueue } from './queue.js';
+import { dispatch, poolStatus, queueTimes, startQueue, stopJob, stopQueue } from './queue.js';
 import { maxSize, minSize, validInput } from './solver.js';
 
 async function handle(request, response) {
@@ -26,8 +28,14 @@ async function handle(request, response) {
 
     const user = currentUser(request);
     if (!user && path.startsWith('/api/')) throw new HttpError(401, 'Увійдіть до свого облікового запису.');
+    if (method === 'GET' && path === '/api/admin') {
+      if (!user.admin) throw new HttpError(403, 'Потрібні права адміністратора.');
+      return json(response, 200, { ...poolStatus(), jobs: activeJobs(), queueLimit });
+    }
     if (method === 'GET' && path === '/api/jobs') {
-      return json(response, 200, { jobs: listJobs(user.name) });
+      const times = queueTimes();
+      const jobs = listJobs(user.name).map(job => ({ ...job, wait: times.get(job.id) }));
+      return json(response, 200, { jobs });
     }
     if (method === 'POST' && path === '/api/jobs') {
       const input = await readJson(request);
@@ -62,10 +70,18 @@ async function handle(request, response) {
   }
 }
 
-const server = createServer(handle);
+await setupAdmin();
+
+const { TLS_CERT, TLS_KEY } = process.env;
+if (Boolean(TLS_CERT) !== Boolean(TLS_KEY)) {
+  throw new Error('Вкажіть обидва шляхи TLS_CERT і TLS_KEY.');
+}
+const server = TLS_CERT
+  ? createHttpsServer({ cert: readFileSync(TLS_CERT), key: readFileSync(TLS_KEY) }, handle)
+  : createServer(handle);
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port, '127.0.0.1', () => {
-  console.log(`http://127.0.0.1:${server.address().port}`);
+  console.log(`http${TLS_CERT ? 's' : ''}://127.0.0.1:${server.address().port}`);
   startQueue();
 });
 

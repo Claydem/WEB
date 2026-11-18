@@ -50,4 +50,18 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(0, '127.0.0.1', () => process.send({ port: server.address().port }));
+
+let usage = process.cpuUsage();
+let sampledAt = performance.now();
+setInterval(() => {
+  if (!process.connected) return;
+  const now = performance.now();
+  const current = process.cpuUsage();
+  const delta = current.user - usage.user + current.system - usage.system;
+  const cpu = Math.min(100, Math.round(delta / (now - sampledAt) / 10));
+  process.send({ cpu, memory: Math.round(process.memoryUsage.rss() / 1024 / 1024) });
+  usage = current;
+  sampledAt = now;
+}, 1000).unref();
+
 process.once('disconnect', () => process.exit());

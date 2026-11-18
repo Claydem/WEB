@@ -6,7 +6,7 @@ export const maxSize = 1200;
 export const maxTime = 30_000;
 export const tolerances = [1e-4, 1e-6, 1e-8];
 
-const ratio = 0.998;
+const ratio = 0.994;
 const maxIterations = 12_000;
 
 export function validInput(input) {

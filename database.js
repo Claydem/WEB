@@ -60,8 +60,9 @@ export function createJob(username, { size, tolerance }) {
   const id = db.prepare('INSERT INTO jobs (username, size, tolerance, createdAt) VALUES (?, ?, ?, ?)')
     .run(username, size, tolerance, Date.now()).lastInsertRowid;
   db.prepare(`
-    DELETE FROM jobs WHERE username = ? AND status NOT IN ('queued', 'running') AND id IN (
-      SELECT id FROM jobs WHERE username = ? ORDER BY id DESC LIMIT -1 OFFSET ?
+    DELETE FROM jobs WHERE id IN (
+      SELECT id FROM jobs WHERE username = ? AND status NOT IN ('queued', 'running')
+      ORDER BY id LIMIT MAX(0, (SELECT COUNT(*) FROM jobs WHERE username = ?) - ?)
     )
   `).run(username, username, historyLimit);
   return { id };
@@ -76,6 +77,23 @@ export function listJobs(username) {
 
 export function queuedJobs() {
   return db.prepare(`SELECT id, size, tolerance FROM jobs WHERE status = 'queued' ORDER BY id`).all();
+}
+
+export function activeJobs() {
+  return db.prepare(`
+    SELECT id, username, status, progress, worker, startedAt
+    FROM jobs WHERE status IN ('queued', 'running') ORDER BY id
+  `).all();
+}
+
+export function averageDuration() {
+  const { duration } = db.prepare(`
+    SELECT AVG(duration) AS duration FROM (
+      SELECT finishedAt - startedAt AS duration FROM jobs
+      WHERE status = 'done' ORDER BY id DESC LIMIT 20
+    )
+  `).get();
+  return Math.max(2000, duration ?? 8000);
 }
 
 export function startJob(id, worker) {
