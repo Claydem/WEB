@@ -3,28 +3,103 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Метод Якобі</title>
+  <meta name="theme-color" content="#f3f5f2">
+  <title>Якобі — обчислення</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" type="module"></script>
 </head>
 <body>
-  <main>
-    <h1>Метод Якобі</h1>
-    <p>Сервер генерує систему лінійних рівнянь і знаходить її розв’язок.</p>
-    <form id="task">
-      <label>Кількість невідомих <input name="size" type="number" min="20" max="1200" value="800" required></label>
-      <label>Точність
-        <select name="tolerance">
-          <option value="0.0001">10⁻⁴</option>
-          <option value="0.000001" selected>10⁻⁶</option>
-          <option value="0.00000001">10⁻⁸</option>
-        </select>
-      </label>
-      <button>Запустити</button>
-    </form>
-    <progress max="100" value="0" aria-label="Прогрес обчислення"></progress>
-    <p id="status" role="status">Готово до запуску.</p>
-    <pre id="result"></pre>
+  <header class="top">
+    <div class="wrap top-inner">
+      <a href="/" class="brand"><span aria-hidden="true">∑</span> Якобі</a>
+      <div id="account" class="account" hidden>
+        <span id="username"></span>
+        <button id="logout" class="secondary">Вийти</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="intro">
+      <h1>Розв’язування систем рівнянь</h1>
+      <p>Виберіть розмір системи. Сервер побудує матрицю та обчислить розв’язок методом Якобі.</p>
+    </div>
+    <p id="notice" class="notice" role="status" hidden></p>
+    <section id="login-panel" class="card login" hidden>
+      <h2>Обліковий запис</h2>
+      <form id="login-form">
+        <label>Логін
+          <input name="name" autocomplete="username" minlength="3" maxlength="24" pattern="[a-zA-Z0-9_\-]{3,24}" required>
+        </label>
+        <label>Пароль
+          <input name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+        </label>
+        <div class="actions">
+          <button name="action" value="login">Увійти</button>
+          <button name="action" value="register" class="secondary">Створити обліковий запис</button>
+        </div>
+      </form>
+    </section>
+
+    <div id="workspace" class="workspace" hidden>
+      <aside>
+        <section class="card task-card">
+          <h2>Нова задача</h2>
+          <form id="job-form">
+            <label>Кількість невідомих
+              <input type="number" name="size" min="20" max="1200" step="1" value="800" required>
+              <small>Від 20 до 1200</small>
+            </label>
+            <label>Абсолютна точність
+              <select name="tolerance">
+                <option value="0.0001">10⁻⁴</option>
+                <option value="0.000001" selected>10⁻⁶</option>
+                <option value="0.00000001">10⁻⁸</option>
+              </select>
+            </label>
+            <button>Запустити обчислення</button>
+          </form>
+        </section>
+        <p class="limits">До 3 незавершених задач на користувача. Одне обчислення триває до 30 с.</p>
+      </aside>
+
+      <section class="card history" aria-labelledby="history-title">
+        <div class="section-head">
+          <h2 id="history-title">Мої задачі</h2>
+          <span id="job-count"></span>
+        </div>
+        <p id="empty" class="empty">Запустіть перше обчислення, щоб тут з’явилися його стан і результат.</p>
+        <div id="jobs"></div>
+      </section>
+    </div>
   </main>
+
+  <dialog id="result-dialog">
+    <div class="section-head">
+      <h2 id="result-title"></h2>
+      <form method="dialog"><button class="secondary">Закрити</button></form>
+    </div>
+    <p id="result-details"></p>
+    <ol id="result-values"></ol>
+  </dialog>
+
+  <template id="job-row">
+    <article class="job">
+      <div class="section-head">
+        <h3></h3>
+        <span class="badge"></span>
+      </div>
+      <p class="job-meta"></p>
+      <div class="job-progress">
+        <p class="progress-label"><span class="stage"></span><span class="percent"></span></p>
+        <progress max="100" value="0" aria-label="Прогрес обчислення"></progress>
+      </div>
+      <p class="job-error" hidden></p>
+      <div class="actions" hidden>
+        <button type="button" class="secondary job-result" hidden>Результат</button>
+        <button type="button" class="secondary job-cancel" hidden>Скасувати</button>
+      </div>
+    </article>
+  </template>
 </body>
 </html>
