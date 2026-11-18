@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Метод Якобі</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body>
+  <main>
+    <h1>Метод Якобі</h1>
+    <p>Сервер генерує систему лінійних рівнянь і знаходить її розв’язок.</p>
+    <form id="task">
+      <label>Кількість невідомих <input name="size" type="number" min="20" max="1200" value="800" required></label>
+      <label>Точність
+        <select name="tolerance">
+          <option value="0.0001">10⁻⁴</option>
+          <option value="0.000001" selected>10⁻⁶</option>
+          <option value="0.00000001">10⁻⁸</option>
+        </select>
+      </label>
+      <button>Запустити</button>
+    </form>
+    <progress max="100" value="0" aria-label="Прогрес обчислення"></progress>
+    <p id="status" role="status">Готово до запуску.</p>
+    <pre id="result"></pre>
+  </main>
+</body>
+</html>

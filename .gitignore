@@ -1,0 +1,4 @@
+data/
+certs/
+*.log
+node_modules/
