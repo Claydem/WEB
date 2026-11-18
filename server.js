@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { currentUser, signIn, signOut } from './auth.js';
 import { cancelJob, createJob, jobResult, listJobs } from './database.js';
 import { HttpError, json, readJson, serveFile } from './http.js';
-import { dispatch, stopJob } from './queue.js';
+import { dispatch, startQueue, stopJob, stopQueue } from './queue.js';
 import { maxSize, minSize, validInput } from './solver.js';
 
 async function handle(request, response) {
@@ -66,5 +66,12 @@ const server = createServer(handle);
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port, '127.0.0.1', () => {
   console.log(`http://127.0.0.1:${server.address().port}`);
-  dispatch();
+  startQueue();
 });
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => {
+    stopQueue();
+    server.close();
+  });
+}
